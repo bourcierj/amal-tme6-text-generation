@@ -128,6 +128,7 @@ if __name__ == '__main__':
 
     from pathlib import Path
     from trump_data import TrumpDataset, TrumpVocabulary
+    from generation import *
 
     from torch.utils.data import DataLoader
 
@@ -144,6 +145,12 @@ if __name__ == '__main__':
     output, _ = net(data)
     print(f"Output dim: {tuple(output.size())}")
     #print(output, '\n')
+
+    gens = generate_tokens_greedy(net, 'I think that', 40, vocab)
+    print(f"Generated text (greedy): {gens}")
+
+    gens = generate_tokens_beam_search(net, 'I think that', 40, 5, vocab)
+    print(f"Generated text (beam search): {gens}")
 
     # from process_trump import letter2id
     # print(letter2id)
