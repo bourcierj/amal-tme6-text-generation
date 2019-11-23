@@ -7,12 +7,12 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from trump_data import *
 from rnn import TextGenerator
 from utils import *
+from generation import *
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -26,6 +26,8 @@ def train(checkpoint, criterion, loader, epochs, clip=None,
         clip = float('inf')
     min_loss = float('inf')
     iteration = 1
+    LOG_TEXTGEN = 1  # log generated text every X epochs
+    vocab = TrumpVocabulary()
 
     def train_epoch():
         nonlocal iteration
@@ -88,13 +90,20 @@ def train(checkpoint, criterion, loader, epochs, clip=None,
             checkpoint.save('_best')
         checkpoint.save()
 
-        # if epoch % 5 == 0: # generate sequences
-        #     # predict_sequences(net, __) #@todo
+        if writer and epoch % LOG_TEXTGEN == 0:
+            # Generate text and log it to tensorflow (with greedy and beam search)
+            greedy_gen = generate_tokens_greedy(net, '', 80, vocab)
+            beam_search_gens = generate_tokens_beam_search(net, '', 80, 3, vocab)
+
+            writer.add_text('Generated/Greedy-gen', greedy_gen, epoch)
+            for i, gen in enumerate(beam_search_gens, 1):
+                writer.add_text(f'Generated/Beam-search-gen{i}', gen, epoch)
 
     print("\nFinished.")
     print(f"Best loss: {min_loss:.4e}\n")
     print(f"Best epoch: {min_epoch}")
     return
+
 
 if __name__ == '__main__':
 
@@ -143,13 +152,5 @@ if __name__ == '__main__':
 
     train(checkpoint, criterion, loader, args.epochs, clip=args.clip, writer=writer)
 
-    tensorboard_logdir = './runs/LSTM-Trump-1'
-    writer = SummaryWriter(tensorboard_logdir)
-    savepath = './lstm-trump-checkpt.pt'
-    # data, _ = next(iter(loader))
-    # writer.add_graph(net, data)
-
-    checkpoint = CheckpointState(net, optimizer, savepath=savepath)
-
-    train(checkpoint, criterion, loader, epochs, clip=clip, writer=writer)
-    writer.close()
+    if writer:
+        writer.close()
