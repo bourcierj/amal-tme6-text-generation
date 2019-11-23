@@ -1,7 +1,5 @@
 """Definition of PyTorch recurrent modules."""
 
-import heapq
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -38,7 +36,8 @@ class LSTM(nn.Module):
 
     def forward(self, x, state=None):
 
-        if not state:  # the state at previous time step
+        if state is None:  # the state at previous time step
+
             # hidden state and memory state
             h = torch.zeros(x.size(1), self.hidden_size).to(x.device)
             mem = torch.zeros(x.size(1), self.hidden_size).to(x.device)
@@ -53,11 +52,16 @@ class LSTM(nn.Module):
             #                     f"match input dimension 1: got {mem.size(0)} for c "
             #                     f"and {x.size(1)} for input")
         output = list()
-        for t, xt in enumerate(x):
-            h, mem = self.one_step(xt, h, mem)
+        for t in range(0, x.size(0)):
+            h, mem = self.one_step(x[t, :, :], h, mem)
             output.append(h)
 
+        # for t, xt in enumerate(x): (1,batch,input_size)
+        #     h, mem = self.one_step(xt, h, mem)
+        #     output.append(h)
+
         output = torch.stack(output, dim=0)
+        #output: (seq_length,batch,hidden), h and mem: (batch,hidden)
         return output, (h, mem)
 
 
@@ -84,7 +88,7 @@ class GRU(nn.Module):
 
     def forward(self, x, state=None):
 
-        if not state:  # the state at previous time step
+        if state is None:  # the state at previous time step
             h = torch.zeros(x.size(1), self.hidden_size).to(x.device)  # hidden state
         else:
             h, = state,
@@ -110,14 +114,10 @@ class TextGenerator(nn.Module):
         self.lin = nn.Linear(hidden_size, vocab_size)
 
     def forward(self, x, state=None):
-        if not state:
-            h = torch.zeros(x.size(1), self.hidden_size).to(x.device)
-            c = torch.zeros(x.size(1), self.hidden_size).to(x.device)
-            state = (h, c)
 
-        embed = self.embedding(x) # (T, B, embedding_size)
-        out, _ = self.rnn(embed, state) # (T, B, hidden_size)
-        out = self.lin(out) # (T, B, vocab_size)
+        embed = self.embedding(x)
+        out, state = self.rnn(embed, state)
+        out = self.lin(out)
         return out, state
 
     # def zero_state(self, batch_size):
@@ -133,7 +133,7 @@ if __name__ == '__main__':
     from torch.utils.data import DataLoader
 
     vocab = TrumpVocabulary()
-    datapath = Path('../tme4/data/trump_full_speech.txt')
+    datapath = Path('../tme4-rnn/data/trump_full_speech.txt')
     dataset = TrumpDataset(datapath)
     loader = DataLoader(dataset, batch_size=16, shuffle=False, collate_fn=dataset.collate)
 
@@ -146,10 +146,10 @@ if __name__ == '__main__':
     print(f"Output dim: {tuple(output.size())}")
     #print(output, '\n')
 
-    gens = generate_tokens_greedy(net, 'I think that', 40, vocab)
+    gens = generate_tokens_greedy(net, '', 80, vocab)
     print(f"Generated text (greedy): {gens}")
 
-    gens = generate_tokens_beam_search(net, 'I think that', 40, 5, vocab)
+    gens = generate_tokens_beam_search(net, '', 80, 5, vocab)
     print(f"Generated text (beam search): {gens}")
 
     # from process_trump import letter2id

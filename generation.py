@@ -4,6 +4,7 @@ import torch.nn.functional as F
 def generate_sentences_greedy(net, beginning, num_sentences, vocab):
     net.eval()
     input = vocab.string2code(beginning).view(-1, 1)  # input
+    input = input.to(next(net.parameters()).device)
     gens = list()
     num_sentences_gen = 0
     state = None
@@ -17,7 +18,7 @@ def generate_sentences_greedy(net, beginning, num_sentences, vocab):
             token = out.argmax()
             gens.append(token.item())
             input = token.view(-1, 1)
-            if token == vocab.EOS_ID:
+            if token.item() == vocab.EOS_ID:
                 num_sentences_gen += 1
 
     gens = vocab.code2string(gens)
@@ -40,6 +41,7 @@ def generate_tokens_greedy(net, beginning, num_tokens, vocab):
     """
     net.eval()
     input = vocab.string2code(beginning).view(-1, 1)  # input
+    input = input.to(next(net.parameters()).device)
     gens = list()
     num_tokens_gen = 0
     state = None
@@ -61,15 +63,14 @@ def generate_tokens_greedy(net, beginning, num_tokens, vocab):
 
 
 def generate_tokens_beam_search(net, beginning, num_tokens, top_k, vocab):
-    """Generates tokens by using a beam search. Takes the argmax of the predicted
-    distribution over the tokens.
+    """Generates tokens by using a beam search.
     Args:
         net (nn.Module): the generator
         beginning (str): a string to begin the text generation. It can provide a
             context via a hidden state for the first token generated. Give a empty
             string to begin generation without context.
         num_tokens (int): the number of tokens to generate.
-        top_k: the beam seach width: number of candidates to consider
+        top_k (int): the beam seach width: number of candidates to consider
         vocab (TrumpVocabulary): the vocabulary
     Returns:
         str: the generated text
@@ -96,21 +97,19 @@ def generate_tokens_beam_search(net, beginning, num_tokens, top_k, vocab):
     # @todo: manage when to stop generating tokens, after an EOS
     net.eval()
     input = vocab.string2code(beginning).view(-1, 1)  # input
+    input = input.to(next(net.parameters()).device)
     gens = list()
     num_tokens_gen = 0
     state = None
     # beam search nodes
-    vocab_size = net.vocab_size
     top_nodes = [None]
     with torch.no_grad():
         while num_tokens_gen < num_tokens:
-            out, state = net(input, state)
-            # print('Raw out size:', out.size())
-            # print('Hidden size:', state[0].size())
+            out, state = net(input, state)  # (?,batch,vocab_size), (batch,hidden)
             # If this is the prediction for the beginning tokens, keep only last
             # time step
             out = out[-1, :, :]  # note: the first dimension is removed
-            out = F.log_softmax(out, 1)
+            out = F.log_softmax(out, 1) # (batch,hidden)
 
             # Add every possible new nodes
             prev_nodes = top_nodes  # previous nodes
@@ -119,14 +118,17 @@ def generate_tokens_beam_search(net, beginning, num_tokens, top_k, vocab):
                 # if the previous node is EOS, do not generate next candidates
                 if prev_node is not None and prev_node.token == vocab.EOS_ID:
                     continue
-                log_probas = out[i, :]
-                assert(log_probas.size() == (vocab_size,))
-                state_i = tuple(tensor[i, :] for tensor in state)
+                log_probas = out[i, :]  # (vocab_size,)
+                assert(log_probas.size() == (vocab.SIZE,))
+                state_i = tuple(tensor[i, :] for tensor in state) #tuple of (hidden,)
                 assert(state_i[0].size() == (net.hidden_size,))
                 for token, logp in enumerate(log_probas):
                     node = BeamSearchNode(state_i, prev_node, token, logp)
                     nodes.append(node)
-            assert(len(nodes) == len(prev_nodes)*vocab_size)
+
+            # print("len(nodes):", len(nodes))
+            # print("len(prev_nodes)*vocab_size:", len(prev_nodes)*vocab.SIZE)
+            # assert(len(nodes) == len(prev_nodes)*vocab.SIZE)
 
             # Get the top-k nodes
             # top_nodes_h = heapq.nlargest(top_k, nodes)
@@ -136,17 +138,15 @@ def generate_tokens_beam_search(net, beginning, num_tokens, top_k, vocab):
             top_nodes = sorted(nodes, reverse=True)[:top_k]
             assert(len(top_nodes) == top_k)
             # extract the top k predicted tokens in a tensor
-            top_indices = torch.tensor([node.token for node in top_nodes]).view(1, -1)
-            assert(top_indices.size() == (1, top_k))
-            # extract the states for the top k predicted tokens
+            # the top k tokens are treated as a batch of input of size (1, top_k)
+            input = torch.tensor([node.token for node in top_nodes]).view(1, -1).to(
+                input.device)
+            assert(input.size() == (1, top_k))
+            # extract the states for the top k predicted token
             state = tuple(torch.stack(tensors, 0)
                           for tensors in zip(*(node.rnn_state for node in top_nodes)))
             assert(state[0].size() == (top_k, net.hidden_size))
 
-            # top k tokens are treated as input in parallel, like a batch of size (1, top_k)
-            # print('Top indices:', top_indices.size(), top_indices)
-            input = top_indices
-            # print('Top hidden size', state[0].size())
             # repeat the hidden and memory states to match top_indices dimension 1 if
             # this is the first time step
             # if num_tokens_gen == 0:
