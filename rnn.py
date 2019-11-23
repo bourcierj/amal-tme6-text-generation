@@ -91,7 +91,7 @@ class GRU(nn.Module):
         if state is None:  # the state at previous time step
             h = torch.zeros(x.size(1), self.hidden_size).to(x.device)  # hidden state
         else:
-            h, = state,
+            h, = state
         output = list()
         for t, xt in enumerate(x):
             h = self.one_step(xt, h)
@@ -102,15 +102,28 @@ class GRU(nn.Module):
 
 
 class TextGenerator(nn.Module):
-    """Text generator using a recurrent cell (RNN, LSTM or GRU)"""
-    def __init__(self, vocab_size, embedding_size, hidden_size):
+    """Text generator using a recurrent cell (RNN, LSTM or GRU)
+    Args:
+        vocab_size (int): the size of the vocabulary, ie the size of the input to the
+            embedding
+        embedding_size (int): the size of the embedding layer
+        hidden_size (int): the size of the hidden state of the RNN
+        cell (str): the type of RNN cell to use. Can be either 'lstm' for an LSTM cell
+            or 'gru' for a GRU cell.
+        """
+    def __init__(self, vocab_size, embedding_size, hidden_size, cell='lstm'):
 
         super(TextGenerator, self).__init__()
         self.embedding_size = embedding_size
         self.hidden_size = hidden_size
         self.vocab_size = vocab_size
+        # the embedding layer
         self.embedding = nn.Embedding(vocab_size, embedding_size)
-        self.rnn = LSTM(embedding_size, hidden_size)
+        if cell == 'lstm':  # use an LSTM cell
+            self.rnn = LSTM(embedding_size, hidden_size)
+        else:  # use a GRU cell
+            self.rnn = GRU(embedding_size, hidden_size)
+        # the output layer
         self.lin = nn.Linear(hidden_size, vocab_size)
 
     def forward(self, x, state=None):
@@ -141,7 +154,7 @@ if __name__ == '__main__':
     print(f"Input batch: {tuple(data.size())}")
     print(data)
     print(f"Target batch: {tuple(target.size())}")
-    net = TextGenerator(vocab.SIZE, embedding_size=10, hidden_size=5)
+    net = TextGenerator(vocab.SIZE, embedding_size=10, hidden_size=5, cell='gru')
     output, _ = net(data)
     print(f"Output dim: {tuple(output.size())}")
     #print(output, '\n')

@@ -92,8 +92,8 @@ def train(checkpoint, criterion, loader, epochs, clip=None,
 
         if writer and epoch % LOG_TEXTGEN == 0:
             # Generate text and log it to tensorflow (with greedy and beam search)
-            greedy_gen = generate_tokens_greedy(net, '', 80, vocab)
-            beam_search_gens = generate_tokens_beam_search(net, '', 80, 3, vocab)
+            greedy_gen = generate_tokens_greedy(net, 'I am', 80, vocab)
+            beam_search_gens = generate_tokens_beam_search(net, 'I am', 80, 3, vocab)
 
             writer.add_text('Generated/Greedy-gen', greedy_gen, epoch)
             for i, gen in enumerate(beam_search_gens, 1):
@@ -116,6 +116,7 @@ if __name__ == '__main__':
         parser.add_argument('--lr', default=0.001, type=float)
         parser.add_argument('--epochs', default=20, type=int)
         parser.add_argument('--clip', default=None, type=float)
+        parser.add_argument('--cell', default='lstm', type=str, choices=['gru', 'lstm'])
         parser.add_argument('--embedding-size', default=30, type=int)
         parser.add_argument('--hidden-size', default=10, type=int)
         return parser.parse_args()
@@ -126,7 +127,7 @@ if __name__ == '__main__':
     vocab = TrumpVocabulary()
     loader = get_dataloader(args.batch_size)
 
-    net = TextGenerator(vocab.SIZE, args.embedding_size, args.hidden_size)
+    net = TextGenerator(vocab.SIZE, args.embedding_size, args.hidden_size, args.cell)
     net = net.to(device)
 
     # In order to exclude losses computed on null entries (zero),
