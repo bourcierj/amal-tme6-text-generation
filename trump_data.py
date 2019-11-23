@@ -122,7 +122,7 @@ if __name__ == '__main__':
     print("Vocabulary size:", vocab.SIZE)
 
     print("id2letter:\n", vocab.id2letter, '\n')
-    datapath = Path('../tme4/data/trump_full_speech.txt')
+    datapath = Path('../tme4-rnn/data/trump_full_speech.txt')
     speeches2code = process(datapath)
     dataset = TrumpDataset(datapath)
 
@@ -131,6 +131,11 @@ if __name__ == '__main__':
     print(f"Number of sentences: {len(dataset)}")
     print("Number of characters (including EOS): "
           f"{sum(s.numel() for s in dataset.sentences)}\n")
+
+    print("Train samples:\n")
+    for i in range(128, 136):
+        input = dataset[i]
+        print(f'Input: {vocab.code2string(input)}')
 
     #print("Tokens beggining sentences:", set(id2letter[c] for c in dataset.begin_codes))
     # batch = dataset.sentences[:8]
