@@ -1,4 +1,4 @@
-"""Trains an LSTM RNN text generator on the Trump speeches dataset."""
+"""Trains an LSTM or GRU text generator on the Trump speeches dataset."""
 
 from pathlib import Path
 from tqdm import tqdm
@@ -40,22 +40,12 @@ def train(checkpoint, criterion, loader, epochs, clip=None,
             seq_length, batch_size = tuple(data.size())
             # reset gradients
             optimizer.zero_grad()
-            output, _ = net(data) # (T, B, VOCAB_SIZE)
+            output, _ = net(data) # (seq_length, batch, vocab_size)
 
             # flatten output and target to compute loss on individual words
             loss = criterion(output.view(batch_size*seq_length, -1), target.view(-1))
             # loss = criterion(output.transpose(1, 2), target)
             # print(f"Loss: {loss:.4f}")
-            # for ot, wt in zip(output, target):
-            #     # compute the loss at this timestep
-            #     loss += criterion(ot, wt)
-            # loss /= seq_length
-
-            # # concatenates vectors of losses at each timestep
-            # loss = torch.stack(loss, dim=0)
-            # assert loss.size() == (seq_length, batch_size)
-            # # sum losses on time dimension, and mean over sentences in the batch
-            # loss = loss.sum(0).mean()
             epoch_loss += loss.item()
             pbar.set_postfix(loss=f'{loss.item():.4e}')
             if writer:
@@ -63,8 +53,8 @@ def train(checkpoint, criterion, loader, epochs, clip=None,
             # compute gradients, update parameters
             loss.backward()
             # Gradient clipping helps prevent the exploding gradient problem in RNNs
-            # clip the gradients to the given clip value (+inf if not specified)
-            # and also return the total norm of parameters
+            # clip the gradients to the given clip value (+inf if not specified),
+            # return the total norm of parameters
             total_norm = torch.nn.utils.clip_grad_norm_(net.parameters(),
                                                         max_norm=clip)
             if writer:
@@ -92,12 +82,12 @@ def train(checkpoint, criterion, loader, epochs, clip=None,
 
         if writer and epoch % LOG_TEXTGEN == 0:
             # Generate text and log it to tensorflow (with greedy and beam search)
-            greedy_gen = generate_tokens_greedy(net, 'I am', 80, vocab)
-            beam_search_gens = generate_tokens_beam_search(net, 'I am', 80, 3, vocab)
+            greedy_gen = generate_tokens_greedy(net, 'I am ', 220, vocab)
+            beam_search_gens = generate_tokens_beam_search(net, 'I am', 220, 3, vocab)
 
-            writer.add_text('Generated/Greedy-gen', greedy_gen, epoch)
+            writer.add_text('Generated/Greedy', 'I am '+greedy_gen, epoch)
             for i, gen in enumerate(beam_search_gens, 1):
-                writer.add_text(f'Generated/Beam-search-gen{i}', gen, epoch)
+                writer.add_text(f'Generated/Beam-search-{i}', gen, epoch)
 
     print("\nFinished.")
     print(f"Best loss: {min_loss:.4e}\n")
