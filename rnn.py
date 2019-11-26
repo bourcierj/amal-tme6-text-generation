@@ -35,9 +35,7 @@ class LSTM(nn.Module):
         return out_h, out_mem
 
     def forward(self, x, state=None):
-
         if state is None:  # the state at previous time step
-
             # hidden state and memory state
             h = torch.zeros(1, x.size(1), self.hidden_size).to(x.device)
             mem = torch.zeros(1, x.size(1), self.hidden_size).to(x.device)
@@ -88,7 +86,6 @@ class GRU(nn.Module):
         return out_h
 
     def forward(self, x, state=None):
-
         if state is None:  # the state at previous time step
             h = torch.zeros(1, x.size(1), self.hidden_size).to(x.device)  # hidden state
         else:
@@ -104,6 +101,24 @@ class GRU(nn.Module):
         output = torch.stack(output, dim=0)
         h.unsqueeze_(0)
         return output, (h,)
+
+
+class GRUWrapper(nn.GRU):
+    """Wrapper around torch.nn.GRU.
+    Overrides the forward pass to tak and output hidden states as tuples of one element.
+    This unifies with torch.nn.LSTM inputs and outputs.
+    """
+    def __init__(self, *args, **kwargs):
+        super(GRUWrapper, self).__init__(*args, **kwargs)
+
+    def forward(self, input, state=None):
+        if state is not None:
+            h_0, = state
+        else:
+            h_0 = None
+        out, h_n = super(GRUWrapper, self).forward(input, h_0)
+        return out, (h_n,)
+
 
 class TextGenerator(nn.Module):
     """Text generator using a recurrent cell (LSTM or GRU)
@@ -124,9 +139,9 @@ class TextGenerator(nn.Module):
         # the embedding layer
         self.embedding = nn.Embedding(vocab_size, embedding_size)
         if cell == 'lstm':  # use an LSTM cell
-            self.rnn = LSTM(embedding_size, hidden_size)
+            self.rnn = nn.LSTM(embedding_size, hidden_size)
         else:  # use a GRU cell
-            self.rnn = GRU(embedding_size, hidden_size)
+            self.rnn = GRUWrapper(embedding_size, hidden_size)
         # the output layer
         self.lin = nn.Linear(hidden_size, vocab_size)
 
@@ -158,7 +173,7 @@ if __name__ == '__main__':
     print(f"Input batch: {tuple(data.size())}")
     print(data)
     print(f"Target batch: {tuple(target.size())}")
-    net = TextGenerator(vocab.SIZE, embedding_size=10, hidden_size=5, cell='gru')
+    net = TextGenerator(vocab.SIZE, embedding_size=10, hidden_size=5, cell='lstm')
     output, _ = net(data)
     print(f"Output dim: {tuple(output.size())}")
     #print(output, '\n')
