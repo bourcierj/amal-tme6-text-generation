@@ -21,7 +21,8 @@ class CheckpointState():
 
     def save(self, suffix=''):
         if suffix:
-            savepath = Path(self.savepath.stem + suffix + self.savepath.suffix)
+            savepath = self.savepath.parent / Path(self.savepath.stem + suffix +
+                                                   self.savepath.suffix)
         else:
             savepath = self.savepath
         with savepath.open('wb') as fp:
