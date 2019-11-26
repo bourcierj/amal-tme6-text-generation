@@ -115,20 +115,17 @@ def generate_tokens_beam_search(net, beginning, num_tokens, top_k, vocab):
             prev_nodes = top_nodes  # previous nodes
             nodes = list()
             for i, prev_node in enumerate(prev_nodes):
-                # if the previous node is EOS, do not generate next candidates
-                if prev_node is not None and prev_node.token == vocab.EOS_ID:
-                    continue
+
                 log_probas = out[i, :]  # (vocab_size,)
                 assert(log_probas.size() == (vocab.SIZE,))
-                state_i = tuple(tensor[i, :] for tensor in state) #tuple of (hidden,)
-                assert(state_i[0].size() == (net.hidden_size,))
+                # for every possible token, add a new child node
                 for token, logp in enumerate(log_probas):
-                    node = BeamSearchNode(state_i, prev_node, token, logp)
+                    node = BeamSearchNode(tuple(tensor[:, i, :] for tensor in state),
+                                          prev_node, token, logp)
                     nodes.append(node)
 
             # print("len(nodes):", len(nodes))
             # print("len(prev_nodes)*vocab_size:", len(prev_nodes)*vocab.SIZE)
-            # assert(len(nodes) == len(prev_nodes)*vocab.SIZE)
 
             # Get the top-k nodes
             # top_nodes_h = heapq.nlargest(top_k, nodes)
@@ -136,24 +133,16 @@ def generate_tokens_beam_search(net, beginning, num_tokens, top_k, vocab):
             # time steps!!! This is weird, maybe ignore and use sorted() anyway
 
             top_nodes = sorted(nodes, reverse=True)[:top_k]
-            assert(len(top_nodes) == top_k)
             # extract the top k predicted tokens in a tensor
             # the top k tokens are treated as a batch of input of size (1, top_k)
             input = torch.tensor([node.token for node in top_nodes]).view(1, -1).to(
                 input.device)
-            assert(input.size() == (1, top_k))
             # extract the states for the top k predicted token
-            state = tuple(torch.stack(tensors, 0)
+            state = tuple(torch.stack(tensors, 1)
                           for tensors in zip(*(node.rnn_state for node in top_nodes)))
-            assert(state[0].size() == (top_k, net.hidden_size))
-
-            # repeat the hidden and memory states to match top_indices dimension 1 if
-            # this is the first time step
-            # if num_tokens_gen == 0:
-            #     state = tuple(tensor.repeat(top_k, 1) for tensor in state)
             num_tokens_gen += 1
 
-    # extract top k sentences
+    # extract top k generated texts
     gens = list()
     for last_node in top_nodes:
         gen = list()
@@ -163,8 +152,8 @@ def generate_tokens_beam_search(net, beginning, num_tokens, top_k, vocab):
             node = node.prev_node
         gen.reverse()
         gens.append(gen)
-    sentences = [vocab.code2string(gen) for gen in gens]
-    return sentences
+    texts = [vocab.code2string(gen) for gen in gens]
+    return texts
 
 # def generate_tokens_beam_search(net, beginning, num_tokens, top_k, string2code, code2string, eos_code):
 #     """Generate characters using beam search"""

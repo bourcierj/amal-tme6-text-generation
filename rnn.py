@@ -39,10 +39,12 @@ class LSTM(nn.Module):
         if state is None:  # the state at previous time step
 
             # hidden state and memory state
-            h = torch.zeros(x.size(1), self.hidden_size).to(x.device)
-            mem = torch.zeros(x.size(1), self.hidden_size).to(x.device)
+            h = torch.zeros(1, x.size(1), self.hidden_size).to(x.device)
+            mem = torch.zeros(1, x.size(1), self.hidden_size).to(x.device)
         else:
             h, mem = state
+            # the input hidden state must have size (1, batch, hidden)
+            assert(h.size() == (1, x.size(1), self.hidden_size))
             # if (h.size(0) != x.size(1)):
             #     raise Exception("Provided hidden state (h) dimension 0 should"
             #                     f"match input dimension 1: got {h.size(0)} for h "
@@ -51,16 +53,16 @@ class LSTM(nn.Module):
             #     raise Exception("Provided memory state (c) dimension 0 should"
             #                     f"match input dimension 1: got {mem.size(0)} for c "
             #                     f"and {x.size(1)} for input")
+        h.squeeze_(0)
+        mem.squeeze_(0)
         output = list()
         for t in range(0, x.size(0)):
             h, mem = self.one_step(x[t, :, :], h, mem)
-            output.append(h)
-
-        # for t, xt in enumerate(x): (1,batch,input_size)
-        #     h, mem = self.one_step(xt, h, mem)
-        #     output.append(h)
+            output.append(h) # list of (1, batch, hidden) -> (T, batch, hidden)
 
         output = torch.stack(output, dim=0)
+        h.unsqueeze_(0)
+        mem.unsqueeze_(0)
         #output: (seq_length,batch,hidden), h and mem: (batch,hidden)
         return output, (h, mem)
 
@@ -83,26 +85,28 @@ class GRU(nn.Module):
         rt = torch.sigmoid(self.lin_r(h_xt))
         # external state update
         out_h = (1 - zt) * h + zt * torch.tanh(self.lin_h(torch.cat((rt * h, xt), dim=1)))
-
         return out_h
 
     def forward(self, x, state=None):
 
         if state is None:  # the state at previous time step
-            h = torch.zeros(x.size(1), self.hidden_size).to(x.device)  # hidden state
+            h = torch.zeros(1, x.size(1), self.hidden_size).to(x.device)  # hidden state
         else:
             h, = state
+            # the input hidden state must have size (1, batch, hidden)
+            assert(h.size() == (1, x.size(1), self.hidden_size))
+        h.squeeze_(0)
         output = list()
-        for t, xt in enumerate(x):
-            h = self.one_step(xt, h)
-            output.append(h)
+        for t in range(0, x.size(0)):
+            h = self.one_step(x[t, :, :], h)
+            output.append(h) # list of (1, batch, hidden) -> (T, batch, hidden)
 
         output = torch.stack(output, dim=0)
+        h.unsqueeze_(0)
         return output, (h,)
 
-
 class TextGenerator(nn.Module):
-    """Text generator using a recurrent cell (RNN, LSTM or GRU)
+    """Text generator using a recurrent cell (LSTM or GRU)
     Args:
         vocab_size (int): the size of the vocabulary, ie the size of the input to the
             embedding
