@@ -14,10 +14,12 @@ class CheckpointState():
 
     def state_dict(self):
         """Checkpoint's state dict, to save and load"""
-        return {'model': self.model.state_dict(),
-                'optimizer': self.optimizer.state_dict(),
-                'epoch': self.epoch
-                }
+        dict_ = dict()
+        dict_['model'] = self.model.state_dict()
+        if self.optimizer:
+            dict_['optimizer'] = self.optimizer.state_dict()
+        dict_['epoch'] = self.epoch
+        return dict_
 
     def save(self, suffix=''):
         """Serializes the checkpoint.
@@ -51,7 +53,7 @@ class CheckpointState():
                 - 'epoch' containing the associated epoch number
         """
         self.model.load_state_dict(state_dict['model'])
-        if self.optimizer is not None:
+        if self.optimizer is not None and 'optimizer' in state_dict:
             self.optimizer.load_state_dict(state_dict['optimizer'])
         self.epoch = state_dict['epoch']
 
