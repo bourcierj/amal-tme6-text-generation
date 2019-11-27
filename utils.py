@@ -20,6 +20,11 @@ class CheckpointState():
                 }
 
     def save(self, suffix=''):
+        """Serializes the checkpoint.
+        Args:
+            suffix (str): if provided, a suffix will be prepended before the extension
+                of the object's savepath attribute.
+        """
         if suffix:
             savepath = self.savepath.parent / Path(self.savepath.stem + suffix +
                                                    self.savepath.suffix)
@@ -29,11 +34,22 @@ class CheckpointState():
             torch.save(self.state_dict(), fp)
 
     def load(self):
+        """Deserializes and map the checkpoint to the available device."""
         with self.savepath.open('rb') as fp:
-            state_dict = torch.load(fp)
+            state_dict = torch.load(
+                fp, map_location=torch.device('cuda' if torch.cuda.is_available()
+                                              else 'cpu'))
             self.update(state_dict)
 
     def update(self, state_dict):
+        """Updates the object with a dictionary
+        Args:
+            state_dict (dict): a dictionary with keys:
+                - 'model' containing a state dict for the checkpoint's model
+                - 'optimizer' containing a state for the checkpoint's optimizer
+                  (optional)
+                - 'epoch' containing the associated epoch number
+        """
         self.model.load_state_dict(state_dict['model'])
         if self.optimizer is not None:
             self.optimizer.load_state_dict(state_dict['optimizer'])
